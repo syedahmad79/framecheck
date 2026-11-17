@@ -6,6 +6,8 @@ implementation screenshot pixel by pixel and shows exactly where, and by how muc
 It runs entirely in the browser. Images are never uploaded, there are no accounts or analytics,
 and comparisons are saved locally in IndexedDB.
 
+**Live demo:** https://syedahmad79.github.io/framecheck/
+
 ## Features
 
 - Import two PNG or JPEG screenshots by drag-and-drop or file picker. Dropping both at once fills
