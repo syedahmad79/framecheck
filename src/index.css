@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-canvas: #0b0c0e;
+  --color-surface: #131518;
+  --color-raised: #1a1d21;
+  --color-hover: #22262b;
+  --color-line: #262a30;
+  --color-line-strong: #3a4049;
+  --color-fg: #e7e9ec;
+  --color-fg-muted: #a2a9b3;
+  --color-fg-subtle: #7f8792;
+  --color-accent: #6ea8fe;
+  --color-diff: #ff4d8d;
+  --color-aa: #f5c542;
+  --color-outside: #5b8cff;
+  --color-danger: #ff7b7b;
+  --color-ok: #4cc38a;
+
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  input[type='range'] {
+    accent-color: var(--color-accent);
+  }
+}
+
+@utility checkerboard {
+  background-color: #1d2024;
+  background-image: repeating-conic-gradient(#272b30 0% 25%, transparent 0% 50%);
+  background-size: 16px 16px;
+}
+
+@utility tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
