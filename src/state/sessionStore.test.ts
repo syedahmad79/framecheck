@@ -35,7 +35,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-const resultFor = (job: DiffJob) => ({ settings: job.settings }) as DiffResult;
+const resultFor = (job: DiffJob) => ({ settings: job.settings, maskBitmap: null }) as DiffResult;
 
 function setup(overrides: Partial<SessionDependencies> = {}) {
   const repository = {
@@ -48,9 +48,10 @@ function setup(overrides: Partial<SessionDependencies> = {}) {
     remove: vi.fn(() => Promise.resolve()),
   } satisfies ProjectRepository;
   const run = vi.fn((job: DiffJob) => Promise.resolve<DiffResult | null>(resultFor(job)));
+  const dispose = vi.fn();
   const store = createSessionStore({
     repository,
-    diffClient: { run },
+    diffClient: { run, dispose },
     loadBlob: vi.fn((_blob: Blob, meta: { name: string }) => Promise.resolve(fakeImage(meta.name))),
     fetchBlob: vi.fn(() => Promise.resolve(new Blob(['x']))),
     sample: {
@@ -61,7 +62,7 @@ function setup(overrides: Partial<SessionDependencies> = {}) {
     createId: () => 'new-id',
     ...overrides,
   });
-  return { store, repository, run };
+  return { store, repository, run, dispose };
 }
 
 beforeEach(() => {
@@ -194,6 +195,43 @@ describe('session store', () => {
       settings: DEFAULT_DIFF_SETTINGS,
       view: { ...DEFAULT_VIEW_SETTINGS, mode: 'overlay', overlayOpacity: 0.8 },
     });
+  });
+
+  it('releases the worker, images and mask bitmaps when closing', async () => {
+    const maskClose = vi.fn();
+    const { store, run, dispose } = setup();
+    run.mockImplementation((job: DiffJob) =>
+      Promise.resolve({
+        settings: job.settings,
+        maskBitmap: { close: maskClose },
+      } as unknown as DiffResult),
+    );
+    await store.getState().openImages(pair()).saved;
+    await vi.runAllTimersAsync();
+    dispose.mockClear();
+    store.getState().close();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(maskClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the previous mask when a newer result replaces it', async () => {
+    const closes: ReturnType<typeof vi.fn>[] = [];
+    const { store, run } = setup();
+    run.mockImplementation((job: DiffJob) => {
+      const close = vi.fn();
+      closes.push(close);
+      return Promise.resolve({
+        settings: job.settings,
+        maskBitmap: { close },
+      } as unknown as DiffResult);
+    });
+    await store.getState().openImages(pair()).saved;
+    await vi.runAllTimersAsync();
+    store.getState().updateSettings({ threshold: 0.3 });
+    await vi.runAllTimersAsync();
+    expect(closes).toHaveLength(2);
+    expect(closes[0]).toHaveBeenCalledTimes(1);
+    expect(closes[1]).not.toHaveBeenCalled();
   });
 
   it('flushes a pending save and releases bitmaps when closing', async () => {

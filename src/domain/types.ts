@@ -50,12 +50,15 @@ export interface ViewSettings {
   readonly sliderPosition: number;
   /** Opacity of the implementation layer in the overlay mode. */
   readonly overlayOpacity: number;
+  /** How strongly the reference shows beneath the difference mask, 0 to 1. */
+  readonly diffContext: number;
 }
 
 export const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   mode: 'side-by-side',
   sliderPosition: 0.5,
   overlayOpacity: 0.5,
+  diffContext: 0.3,
 };
 
 /** Raw, non-premultiplied RGBA pixels in row-major order. */

@@ -19,6 +19,9 @@ let cache: DecodedPair | null = null;
 let pending: DiffRequest | null = null;
 let draining = false;
 
+/** True once a newer request has arrived; narrowing cannot see that across an await. */
+const superseded = () => pending !== null;
+
 async function readPixels(blob: Blob): Promise<RgbaImage> {
   if (typeof OffscreenCanvas === 'undefined') {
     throw new Error('This browser does not support OffscreenCanvas, which Framecheck needs.');
@@ -51,19 +54,37 @@ async function handle(request: DiffRequest): Promise<void> {
   }
 
   // A newer request arrived while decoding; its result is the only one anyone wants.
-  if (pending) return;
+  if (superseded()) return;
 
   const started = performance.now();
-  const computation = computeDiff(cache.reference, cache.implementation, request.settings);
+  const { mask, ...computation } = computeDiff(
+    cache.reference,
+    cache.implementation,
+    request.settings,
+  );
   const compareMs = performance.now() - started;
+
+  const { width, height } = computation.layout.overlap;
+  const maskBitmap =
+    width > 0 && height > 0
+      ? await createImageBitmap(
+          new ImageData(mask as Uint8ClampedArray<ArrayBuffer>, width, height),
+        )
+      : null;
+  if (superseded()) {
+    maskBitmap?.close();
+    return;
+  }
 
   scope.postMessage(
     {
       type: 'result',
       jobId: request.jobId,
-      result: { ...computation, settings: request.settings, compareMs, decodeMs },
+      result: { ...computation, maskBitmap, settings: request.settings, compareMs, decodeMs },
     },
-    [computation.mask.buffer, computation.density.counts.buffer],
+    maskBitmap
+      ? [maskBitmap, computation.density.counts.buffer]
+      : [computation.density.counts.buffer],
   );
 }
 

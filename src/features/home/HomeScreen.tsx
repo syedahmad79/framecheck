@@ -1,14 +1,15 @@
-import { useEffect, useRef, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { IMAGE_ROLES } from '@/domain/types';
 import type { ImagePair, LoadedImage } from '@/services/images';
 import type { ProjectRepository } from '@/services/projectRepository';
 import { routeToHash } from '@/state/route';
 import { Button } from '@/ui/Button';
-import { AlertIcon, Logo, SwapIcon } from '@/ui/icons';
+import { ChevronRightIcon, LockIcon, Logo, SwapIcon } from '@/ui/icons';
+import { ThemeToggle } from '@/ui/ThemeToggle';
+import { ProjectList } from '../projects/ProjectList';
+import { useProjectList } from '../projects/useProjectList';
 import { DropSlot } from './DropSlot';
-import { ProjectList } from './ProjectList';
 import { useImportSlots } from './useImportSlots';
-import { useProjectList } from './useProjectList';
 
 interface HomeScreenProps {
   readonly repository: ProjectRepository;
@@ -17,12 +18,15 @@ interface HomeScreenProps {
 }
 
 const hasFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files');
+const sampleUrl = (file: string) => `${import.meta.env.BASE_URL}sample/${file}`;
 
 export function HomeScreen({ repository, loadFile, onCompare }: HomeScreenProps) {
   const importSlots = useImportSlots(loadFile);
   const projects = useProjectList(repository);
   const compareRef = useRef<HTMLButtonElement>(null);
+  const [dragDepth, setDragDepth] = useState(0);
   const ready = importSlots.pair !== null;
+  const anyLoaded = IMAGE_ROLES.some((role) => importSlots.slots[role].status === 'loaded');
 
   // Once both images are in, the next action is always "Compare".
   useEffect(() => {
@@ -36,83 +40,127 @@ export function HomeScreen({ repository, loadFile, onCompare }: HomeScreenProps)
 
   return (
     <div
-      className="h-full overflow-y-auto"
+      className="bg-bg h-full overflow-y-auto"
       // Dropping anywhere on the page works; without this the browser would navigate to the file.
+      onDragEnter={(event) => hasFiles(event) && setDragDepth((depth) => depth + 1)}
+      onDragLeave={(event) => hasFiles(event) && setDragDepth((depth) => Math.max(0, depth - 1))}
       onDragOver={(event) => {
         if (hasFiles(event)) event.preventDefault();
       }}
       onDrop={(event) => {
+        setDragDepth(0);
         if (!hasFiles(event)) return;
         event.preventDefault();
         importSlots.assignMany(Array.from(event.dataTransfer.files));
       }}
     >
-      <header className="border-line flex h-11 items-center gap-2 border-b px-4">
-        <Logo />
-        <span className="text-[13px] font-semibold tracking-tight">Framecheck</span>
+      <header className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
+        <div className="font-display flex items-center gap-2 text-base font-semibold">
+          <Logo size={22} />
+          Framecheck
+        </div>
+        <ThemeToggle />
       </header>
 
-      <main className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-semibold tracking-tight">Compare two screenshots</h1>
-          <p className="text-fg-muted max-w-2xl">
-            Pixel-level comparison of a reference and an implementation. Everything runs in your
-            browser; images are never uploaded.
+      <main className="mx-auto flex max-w-4xl flex-col gap-10 px-4 pt-6 pb-16 sm:px-6 sm:pt-10">
+        <div className="flex max-w-2xl flex-col gap-3">
+          <h1 className="font-display text-display font-semibold text-balance max-sm:text-xl">
+            Compare what you designed with what you built.
+          </h1>
+          <p className="text-fg-muted text-base">
+            Add a reference screenshot and an implementation screenshot. Framecheck shows exactly
+            which pixels differ, and by how much.
+          </p>
+          <p className="text-fg-subtle flex items-center gap-1.5 text-xs">
+            <LockIcon width={13} height={13} />
+            Runs entirely in your browser. Your images are never uploaded.
           </p>
         </div>
 
-        <section aria-label="New comparison" className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <section aria-label="New comparison" className="flex flex-col gap-4">
+          <div className="relative grid gap-3 sm:grid-cols-2">
             {IMAGE_ROLES.map((role) => (
               <DropSlot
                 key={role}
                 role={role}
                 slot={importSlots.slots[role]}
+                pageDragging={dragDepth > 0}
                 onFiles={(files) => importSlots.assignMany(files, role)}
                 onClear={() => importSlots.clear(role)}
               />
             ))}
+            <Button
+              iconOnly
+              onClick={importSlots.swap}
+              disabled={!anyLoaded}
+              aria-label="Swap reference and implementation"
+              className="absolute top-1/2 left-1/2 z-10 hidden size-9 -translate-x-1/2 -translate-y-1/2 rounded-full sm:inline-flex"
+            >
+              <SwapIcon />
+            </Button>
           </div>
 
           {importSlots.notice && (
-            <p role="alert" className="text-danger flex items-center gap-1.5 text-xs">
-              <AlertIcon className="shrink-0" />
+            <p role="alert" className="text-danger text-xs">
               {importSlots.notice}
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               ref={compareRef}
               variant="primary"
-              className="h-8 px-3.5"
+              className="h-9 px-4"
               disabled={!ready}
               onClick={compare}
             >
               Compare
             </Button>
-            <Button
-              variant="ghost"
-              className="h-8"
-              onClick={importSlots.swap}
-              disabled={IMAGE_ROLES.every((role) => importSlots.slots[role].status !== 'loaded')}
-            >
+            <Button className="sm:hidden" onClick={importSlots.swap} disabled={!anyLoaded}>
               <SwapIcon />
               Swap
             </Button>
-            <p className="text-fg-muted ml-auto">
-              No screenshots handy?{' '}
-              <a
-                href={routeToHash({ name: 'sample' })}
-                className="text-accent rounded-sm underline-offset-2 hover:underline"
-              >
-                Open the sample comparison
-              </a>
+            <p className="text-fg-subtle text-xs">
+              PNG or JPEG, up to 50 MB each. Drop both at once to fill both slots.
             </p>
           </div>
         </section>
 
-        <ProjectList state={projects.state} onDelete={(id) => void projects.remove(id)} />
+        <a
+          href={routeToHash({ name: 'sample' })}
+          className="motion-colors group bg-raised shadow-raised hover:bg-hover flex items-center gap-4 rounded-2xl p-3"
+        >
+          <span className="relative h-16 w-28 shrink-0" aria-hidden="true">
+            <img
+              src={sampleUrl('reference.png')}
+              alt=""
+              className="absolute top-0 left-0 h-12 w-20 rounded-md object-cover object-top shadow-[0_0_0_1.5px_var(--ref)]"
+            />
+            <img
+              src={sampleUrl('implementation.png')}
+              alt=""
+              className="absolute right-0 bottom-0 h-12 w-20 rounded-md object-cover object-top shadow-[0_0_0_1.5px_var(--impl)]"
+            />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Open the sample comparison</span>
+            <span className="text-fg-muted block text-xs">
+              A billing page with deliberate regressions: a missing badge, tighter card padding, a
+              darker button and a shifted usage section.
+            </span>
+          </span>
+          <ChevronRightIcon className="motion-transform text-fg-subtle group-hover:translate-x-0.5" />
+        </a>
+
+        <section aria-labelledby="saved-heading" className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between">
+            <h2 id="saved-heading" className="eyebrow">
+              Saved comparisons
+            </h2>
+            <p className="text-fg-subtle text-xs">Stored in this browser only</p>
+          </div>
+          <ProjectList state={projects.state} onDelete={(id) => void projects.remove(id)} />
+        </section>
       </main>
     </div>
   );

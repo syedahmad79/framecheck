@@ -10,7 +10,12 @@ export interface DiffRequest {
   readonly settings: DiffSettings;
 }
 
-export interface DiffResult extends DiffComputation {
+export interface DiffResult extends Omit<DiffComputation, 'mask'> {
+  /**
+   * The classification mask of the overlap region as a bitmap, built in the worker so the main
+   * thread never touches the raw pixels. Null when there is nothing to compare.
+   */
+  readonly maskBitmap: ImageBitmap | null;
   /** The settings this result was computed with. */
   readonly settings: DiffSettings;
   /** Time spent in the comparison itself, excluding image decoding. */

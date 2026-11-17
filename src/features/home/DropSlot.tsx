@@ -1,36 +1,46 @@
 import { useId, useRef, useState, type DragEvent } from 'react';
 import { ACCEPT_ATTRIBUTE, formatBytes, formatDimensions } from '@/domain/files';
 import { ROLE_LABEL, type ImageRole } from '@/domain/types';
-import { BitmapCanvas } from '@/ui/BitmapCanvas';
 import { Button } from '@/ui/Button';
 import { cn } from '@/ui/cn';
-import { AlertIcon, UploadIcon } from '@/ui/icons';
+import { AlertIcon, ImageIcon } from '@/ui/icons';
+import { Spinner } from '@/ui/Spinner';
+import { Thumbnail } from './Thumbnail';
 import type { ImportSlot } from './useImportSlots';
 
-const ROLE_HINT: Record<ImageRole, string> = {
-  reference: 'The design or expected result',
-  implementation: 'What was actually built',
+const ROLE_COPY: Record<ImageRole, { hint: string; dot: string; empty: string }> = {
+  reference: {
+    hint: 'The design, or how it should look',
+    dot: 'bg-ref',
+    empty: 'Drop the reference screenshot',
+  },
+  implementation: {
+    hint: 'What was actually built',
+    dot: 'bg-impl',
+    empty: 'Drop the implementation screenshot',
+  },
 };
-
-const THUMBNAIL_MAX = 480;
 
 interface DropSlotProps {
   readonly role: ImageRole;
   readonly slot: ImportSlot;
+  /** A file is being dragged somewhere over the page. */
+  readonly pageDragging: boolean;
   readonly onFiles: (files: File[]) => void;
   readonly onClear: () => void;
 }
 
-export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
+export function DropSlot({ role, slot, pageDragging, onFiles, onClear }: DropSlotProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragDepth, setDragDepth] = useState(0);
   const headingId = useId();
   const errorId = useId();
-  const dragging = dragDepth > 0;
+  const copy = ROLE_COPY[role];
+  const overSlot = dragDepth > 0;
 
   const onDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
-    // Handled here; do not let the page-level drop target assign the same files again.
+    // Handled here; the page-level drop target must not assign the same files again.
     event.stopPropagation();
     setDragDepth(0);
     onFiles(Array.from(event.dataTransfer.files));
@@ -50,21 +60,25 @@ export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
       className={cn(
-        'bg-canvas flex min-h-56 flex-col rounded-lg border transition-colors',
-        dragging
-          ? 'border-accent bg-accent/5'
+        'motion-colors bg-raised flex min-h-64 flex-col rounded-2xl',
+        overSlot
+          ? 'shadow-[0_0_0_2px_var(--focus)]'
           : slot.status === 'error'
-            ? 'border-danger/50'
+            ? 'shadow-[0_0_0_1px_color-mix(in_srgb,var(--danger)_55%,transparent)]'
             : slot.status === 'loaded'
-              ? 'border-line-strong'
-              : 'border-line-strong border-dashed',
+              ? 'shadow-raised'
+              : cn(
+                  'border border-dashed',
+                  pageDragging ? 'border-focus bg-hover' : 'border-line-strong',
+                ),
       )}
     >
-      <header className="flex items-baseline justify-between gap-3 px-3.5 pt-3">
-        <h2 id={headingId} className="text-[13px] font-semibold">
+      <header className="flex items-center justify-between gap-3 px-4 pt-3.5">
+        <h2 id={headingId} className="flex items-center gap-2 text-sm font-semibold">
+          <span className={cn('size-2.5 rounded-full', copy.dot)} aria-hidden="true" />
           {ROLE_LABEL[role]}
         </h2>
-        <p className="text-fg-subtle truncate text-xs">{ROLE_HINT[role]}</p>
+        <p className="text-fg-subtle truncate text-xs">{copy.hint}</p>
       </header>
 
       <input
@@ -83,13 +97,9 @@ export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
       />
 
       {slot.status === 'loaded' ? (
-        <div className="flex flex-1 flex-col gap-3 p-3.5">
-          <div className="checkerboard border-line flex h-32 items-center justify-center overflow-hidden rounded-md border">
-            <BitmapCanvas
-              bitmap={slot.image.bitmap}
-              size={thumbnailSize(slot.image)}
-              className="max-h-full max-w-full object-contain"
-            />
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          <div className="bg-stage flex h-36 items-center justify-center overflow-hidden rounded-lg">
+            <Thumbnail blob={slot.image.blob} className="max-h-full max-w-full object-contain" />
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -100,11 +110,16 @@ export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
                 {formatDimensions(slot.image)} px · {formatBytes(slot.image.bytes)}
               </p>
             </div>
-            <div className="flex gap-1.5">
-              <Button onClick={openPicker} aria-label={`Replace ${ROLE_LABEL[role]} image`}>
+            <div className="flex shrink-0 gap-1">
+              <Button
+                size="sm"
+                onClick={openPicker}
+                aria-label={`Replace ${ROLE_LABEL[role]} image`}
+              >
                 Replace
               </Button>
               <Button
+                size="sm"
                 variant="ghost"
                 onClick={onClear}
                 aria-label={`Remove ${ROLE_LABEL[role]} image`}
@@ -114,34 +129,32 @@ export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
             </div>
           </div>
         </div>
+      ) : slot.status === 'loading' ? (
+        <p role="status" className="text-fg-muted flex flex-1 items-center justify-center gap-2">
+          <Spinner />
+          Reading {slot.fileName}…
+        </p>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2.5 p-5 text-center">
-          {slot.status === 'loading' ? (
-            <p role="status" className="text-fg-muted">
-              Reading {slot.fileName}…
-            </p>
-          ) : (
-            <>
-              <UploadIcon className="text-fg-subtle" width={20} height={20} />
-              <p className="text-fg-muted">
-                {dragging ? 'Drop to add' : 'Drop a PNG or JPEG here'}
-              </p>
-              <Button
-                onClick={openPicker}
-                aria-label={`Choose ${ROLE_LABEL[role]} image`}
-                aria-describedby={slot.status === 'error' ? errorId : undefined}
-              >
-                Choose file
-              </Button>
-            </>
-          )}
+        <div className="flex flex-1 flex-col p-2">
+          <button
+            type="button"
+            onClick={openPicker}
+            aria-describedby={slot.status === 'error' ? errorId : undefined}
+            className="motion-colors hover:bg-hover flex flex-1 flex-col items-center justify-center gap-2 rounded-xl px-4 py-6 text-center"
+          >
+            <ImageIcon width={22} height={22} className="text-fg-subtle" />
+            <span className="text-fg">{overSlot ? 'Release to add' : copy.empty}</span>
+            <span className="text-fg-muted text-xs">
+              or <span className="underline underline-offset-2">choose a file</span> · PNG or JPEG
+            </span>
+          </button>
           {slot.status === 'error' && (
             <p
               id={errorId}
               role="alert"
-              className="text-danger mt-1 flex max-w-sm items-start gap-1.5 text-left text-xs"
+              className="text-danger mx-2 mb-2 flex items-start gap-1.5 text-xs"
             >
-              <AlertIcon className="mt-px shrink-0" />
+              <AlertIcon className="mt-0.5" width={14} height={14} />
               <span>{slot.message}</span>
             </p>
           )}
@@ -149,12 +162,4 @@ export function DropSlot({ role, slot, onFiles, onClear }: DropSlotProps) {
       )}
     </section>
   );
-}
-
-function thumbnailSize(image: { width: number; height: number }) {
-  const scale = Math.min(1, THUMBNAIL_MAX / Math.max(image.width, image.height));
-  return {
-    width: Math.max(1, Math.round(image.width * scale)),
-    height: Math.max(1, Math.round(image.height * scale)),
-  };
 }

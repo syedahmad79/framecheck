@@ -18,10 +18,14 @@ describe('HomeScreen', () => {
   it('starts with two empty slots, a disabled Compare button and an empty saved list', async () => {
     setup();
     expect(screen.getByRole('button', { name: 'Compare' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Choose Reference image' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Choose Implementation image' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Drop the reference screenshot/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Drop the implementation screenshot/ }),
+    ).toBeInTheDocument();
     expect(await screen.findByText(/Nothing saved yet/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open the sample comparison' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Open the sample comparison/ })).toHaveAttribute(
       'href',
       '#/sample',
     );
@@ -85,7 +89,7 @@ describe('HomeScreen', () => {
     await user.upload(input('reference'), pngFile('design.png'));
     await screen.findByText('design.png');
 
-    await user.click(screen.getByRole('button', { name: 'Swap' }));
+    await user.click(screen.getByRole('button', { name: 'Swap reference and implementation' }));
     expect(
       within(screen.getByTestId('slot-implementation')).getByText('design.png'),
     ).toBeInTheDocument();

@@ -1,27 +1,183 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-canvas: #0b0c0e;
-  --color-surface: #131518;
-  --color-raised: #1a1d21;
-  --color-hover: #22262b;
-  --color-line: #262a30;
-  --color-line-strong: #3a4049;
-  --color-fg: #e7e9ec;
-  --color-fg-muted: #a2a9b3;
-  --color-fg-subtle: #7f8792;
-  --color-accent: #6ea8fe;
-  --color-diff: #ff4d8d;
-  --color-aa: #f5c542;
-  --color-outside: #5b8cff;
-  --color-danger: #ff7b7b;
-  --color-ok: #4cc38a;
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Design tokens. Two themes, each tuned on its own rather than inverted:
+ * dark is graphite with a darker stage so screenshots lift off the chrome;
+ * light is warm paper with a mid-grey stage so white screenshots keep a visible edge.
+ * Colour carries meaning only: blue is the reference, orange the implementation,
+ * pink a difference, teal an ignored anti-aliased pixel.
+ */
+:root {
+  color-scheme: light;
+
+  --bg: #f4f4f1;
+  --chrome: #fbfbf9;
+  --raised: #ffffff;
+  --hover: #efefeb;
+  --pressed: #e6e6e1;
+  --stage: #dcdcd7;
+  --line: rgb(20 20 18 / 0.09);
+  --line-strong: rgb(20 20 18 / 0.18);
+
+  --fg: #151613;
+  --fg-muted: #565a60;
+  --fg-subtle: #6c7077;
+
+  --accent: #151613;
+  --accent-hover: #34352f;
+  --accent-fg: #fbfbf9;
+  --focus: #1a66e8;
+
+  --ref: #1a66e8;
+  --impl: #c2540a;
+  --diff: #ff2d7d;
+  --diff-ink: #c70c58;
+  --aa: #2dbec8;
+  --aa-ink: #0d7d86;
+  --outside: #808aa0;
+  --ok: #12804f;
+  --warn: #8a5b00;
+  --danger: #c4262e;
+
+  --shadow-raised: 0 1px 2px rgb(20 20 18 / 0.06), 0 0 0 1px var(--line);
+  --shadow-pop:
+    0 8px 24px -4px rgb(20 20 18 / 0.16), 0 2px 6px rgb(20 20 18 / 0.08),
+    0 0 0 1px var(--line-strong);
+  --shadow-dialog:
+    0 24px 64px -12px rgb(20 20 18 / 0.28), 0 4px 12px rgb(20 20 18 / 0.1),
+    0 0 0 1px var(--line-strong);
+  --material: rgb(251 251 249 / 0.78);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0c0d0f;
+  --chrome: #131417;
+  --raised: #1a1c20;
+  --hover: #22252a;
+  --pressed: #2a2d33;
+  --stage: #08090a;
+  --line: rgb(255 255 255 / 0.075);
+  --line-strong: rgb(255 255 255 / 0.15);
+
+  --fg: #ededef;
+  --fg-muted: #a3a7af;
+  --fg-subtle: #80848d;
+
+  --accent: #ededef;
+  --accent-hover: #ffffff;
+  --accent-fg: #0c0d0f;
+  --focus: #6aa6ff;
+
+  --ref: #5aa2ff;
+  --impl: #ff9a3d;
+  --diff: #ff2d7d;
+  --diff-ink: #ff6fa3;
+  --aa: #2dbec8;
+  --aa-ink: #52d0d9;
+  --outside: #808aa0;
+  --ok: #46c28a;
+  --warn: #e8b23a;
+  --danger: #ff7a7a;
+
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px var(--line);
+  --shadow-pop:
+    0 10px 28px -4px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4), 0 0 0 1px var(--line-strong);
+  --shadow-dialog:
+    0 28px 72px -12px rgb(0 0 0 / 0.75), 0 4px 14px rgb(0 0 0 / 0.5), 0 0 0 1px var(--line-strong);
+  --material: rgb(19 20 23 / 0.74);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --material: var(--chrome);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-chrome: var(--chrome);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-stage: var(--stage);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-focus: var(--focus);
+  --color-ref: var(--ref);
+  --color-impl: var(--impl);
+  --color-diff: var(--diff);
+  --color-diff-ink: var(--diff-ink);
+  --color-aa: var(--aa);
+  --color-aa-ink: var(--aa-ink);
+  --color-outside: var(--outside);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-material: var(--material);
+
+  --shadow-raised: var(--shadow-raised);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    sans-serif;
-  --font-mono:
-    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, 'Helvetica Neue', sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI',
+    system-ui, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Tracking tightens as type grows and loosens as it shrinks. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-2xs--letter-spacing: 0.02em;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-xs--letter-spacing: 0.01em;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-base--letter-spacing: -0.006em;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5rem;
+  --text-lg--letter-spacing: -0.012em;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.02em;
+  --text-display: 2.125rem;
+  --text-display--line-height: 2.375rem;
+  --text-display--letter-spacing: -0.028em;
+
+  --ease-out: var(--ease-out);
 }
 
 @layer base {
@@ -32,31 +188,204 @@
   }
 
   body {
-    background-color: var(--color-surface);
-    color: var(--color-fg);
+    background-color: var(--bg);
+    color: var(--fg);
     font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
-  input[type='range'] {
-    accent-color: var(--color-accent);
+  ::selection {
+    background: color-mix(in srgb, var(--focus) 30%, transparent);
   }
-}
 
-@utility checkerboard {
-  background-color: #1d2024;
-  background-image: repeating-conic-gradient(#272b30 0% 25%, transparent 0% 50%);
-  background-size: 16px 16px;
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  button,
+  [role='radio'],
+  [role='slider'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  dialog {
+    color: inherit;
+  }
 }
 
 @utility tabular {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+@utility motion-colors {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+@utility motion-transform {
+  transition-property: transform, opacity;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
+}
+
+@utility eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+/* Range input: a filled track and a plain thumb, identical in every engine. */
+input[type='range'].fc-range {
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+  --fill: 50%;
+}
+
+input[type='range'].fc-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--fg) var(--fill), var(--line-strong) var(--fill));
+}
+
+input[type='range'].fc-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+input[type='range'].fc-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+
+input[type='range'].fc-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--raised);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+input[type='range'].fc-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--raised);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+input[type='range'].fc-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+input[type='range'].fc-range:focus-visible {
+  outline: none;
+}
+
+input[type='range'].fc-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+input[type='range'].fc-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Native dialog as a floating panel with a soft scrim. */
+dialog.fc-dialog {
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: var(--raised);
+  color: var(--fg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-dialog);
+  max-width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+}
+
+dialog.fc-dialog::backdrop {
+  background: rgb(8 9 10 / 0.5);
+}
+
+dialog.fc-dialog[open] {
+  animation: fc-dialog-in var(--dur-base) var(--ease-out);
+}
+
+dialog.fc-dialog[open]::backdrop {
+  animation: fc-fade-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes fc-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes fc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Colours the canvas painter reads; the DOM never uses them directly. */
+:root {
+  --paper-a: #ffffff;
+  --paper-b: #e7e7e3;
+  --paper-diff: #f5f5f2;
+  --paper-edge: rgb(20 20 18 / 0.28);
+  --grid: rgb(20 20 18 / 0.16);
+}
+
+:root[data-theme='dark'] {
+  --paper-a: #2b2e33;
+  --paper-b: #222529;
+  --paper-diff: #0e0f11;
+  --paper-edge: rgb(255 255 255 / 0.2);
+  --grid: rgb(255 255 255 / 0.16);
 }

@@ -5,7 +5,7 @@ export interface SegmentOption<T extends string> {
   readonly value: T;
   readonly label: string;
   readonly icon?: ReactNode;
-  /** Shown in the tooltip, e.g. a keyboard shortcut. */
+  /** Shown in the native tooltip, e.g. a keyboard shortcut. */
   readonly hint?: string;
 }
 
@@ -14,42 +14,47 @@ interface SegmentedControlProps<T extends string> {
   readonly options: readonly SegmentOption<T>[];
   readonly value: T;
   readonly onChange: (value: T) => void;
-  /** Hide text labels below the `md` breakpoint when every option has an icon. */
-  readonly compact?: boolean;
+  /** When text labels are shown: always, from the `md` breakpoint up, or never (icon-only). */
+  readonly labels?: 'always' | 'md' | 'never';
+  readonly size?: 'sm' | 'md';
   readonly className?: string;
 }
 
 /**
- * A single-choice control implemented as an ARIA radio group: one tab stop,
- * arrow keys move and select, Home/End jump to the ends.
+ * A single-choice control implemented as an ARIA radio group: one tab stop, arrow keys move and
+ * select, Home/End jump to the ends. The selected thumb slides between segments.
  */
 export function SegmentedControl<T extends string>({
   label,
   options,
   value,
   onChange,
-  compact = false,
+  labels = 'always',
+  size = 'md',
   className,
 }: SegmentedControlProps<T>) {
   const groupRef = useRef<HTMLDivElement>(null);
+  const index = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
 
-  const select = (index: number) => {
-    const option = options[(index + options.length) % options.length];
+  const select = (next: number) => {
+    const option = options[(next + options.length) % options.length];
     if (!option) return;
     onChange(option.value);
     groupRef.current?.querySelector<HTMLButtonElement>(`[data-value="${option.value}"]`)?.focus();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const current = options.findIndex((option) => option.value === value);
     switch (event.key) {
       case 'ArrowRight':
       case 'ArrowDown':
-        select(current + 1);
+        select(index + 1);
         break;
       case 'ArrowLeft':
       case 'ArrowUp':
-        select(current - 1);
+        select(index - 1);
         break;
       case 'Home':
         select(0);
@@ -69,8 +74,21 @@ export function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cn('border-line bg-canvas inline-flex rounded-md border p-0.5', className)}
+      className={cn(
+        'bg-hover relative inline-grid auto-cols-fr grid-flow-col rounded-lg p-0.5',
+        size === 'sm' ? 'h-7' : 'h-8 pointer-coarse:h-10',
+        className,
+      )}
     >
+      <span
+        aria-hidden="true"
+        className="motion-transform bg-raised shadow-raised absolute inset-y-0.5 left-0.5 rounded-md"
+        style={{
+          width: `calc((100% - 4px) / ${options.length})`,
+          transform: `translateX(${index * 100}%)`,
+          transitionProperty: 'transform',
+        }}
+      />
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -85,16 +103,17 @@ export function SegmentedControl<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex h-6 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-[12.5px] whitespace-nowrap transition-colors select-none',
-              selected
-                ? 'bg-hover text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
-                : 'text-fg-muted hover:text-fg',
+              'motion-colors relative inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 text-sm whitespace-nowrap select-none',
+              selected ? 'text-fg' : 'text-fg-muted hover:text-fg',
             )}
           >
             {option.icon}
-            <span className={cn(compact && option.icon ? 'hidden md:inline' : undefined)}>
-              {option.label}
-            </span>
+            {labels !== 'never' && (
+              <span className={cn(labels === 'md' && option.icon ? 'max-md:sr-only' : undefined)}>
+                {option.label}
+              </span>
+            )}
+            {labels === 'never' && <span className="sr-only">{option.label}</span>}
           </button>
         );
       })}

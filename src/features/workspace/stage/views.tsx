@@ -1,163 +1,209 @@
+import { useCallback, useState, type ReactNode } from 'react';
 import type { ComparisonLayout } from '@/domain/layout';
-import { ROLE_LABEL } from '@/domain/types';
+import { formatDimensions } from '@/domain/files';
+import { ROLE_LABEL, type ImageRole } from '@/domain/types';
 import type { DiffResult } from '@/services/diffProtocol';
 import type { ImagePair } from '@/services/images';
-import { useViewportStore } from '@/state/viewportStore';
-import { Button } from '@/ui/Button';
-import { DensityLayer, ImageLayer, MaskLayer } from './layers';
-import { PaneFrame, PaneLabel } from './PaneFrame';
+import { usePeek } from '@/state/stageStores';
+import { cn } from '@/ui/cn';
+import { PaneCanvas } from './PaneCanvas';
+import {
+  desaturate,
+  drawBackdrop,
+  drawDensity,
+  drawEdge,
+  drawGrid,
+  drawLayer,
+  drawOutside,
+  drawPlacement,
+  drawProbe,
+  type Frame,
+} from './paint';
 import { SliderHandle } from './SliderHandle';
-import { TransformedContent } from './TransformedContent';
 
 interface ViewProps {
   readonly images: ImagePair;
   readonly layout: ComparisonLayout;
 }
 
-export function SideBySideView({ images, layout }: ViewProps) {
+const ROLE_DOT: Record<ImageRole, string> = { reference: 'bg-ref', implementation: 'bg-impl' };
+
+export function RoleTag({
+  role,
+  detail,
+  side = 'left',
+}: {
+  role: ImageRole;
+  detail?: ReactNode;
+  side?: 'left' | 'right';
+}) {
   return (
-    <div className="bg-line grid h-full grid-cols-1 grid-rows-2 gap-px sm:grid-cols-2 sm:grid-rows-1">
-      <PaneFrame measure className="bg-canvas">
-        <TransformedContent size={layout.canvas}>
-          <ImageLayer
-            image={images.reference}
-            placement={layout.reference}
-            canvas={layout.canvas}
-          />
-        </TransformedContent>
-        <PaneLabel>{ROLE_LABEL.reference}</PaneLabel>
-      </PaneFrame>
-      <PaneFrame className="bg-canvas">
-        <TransformedContent size={layout.canvas}>
-          <ImageLayer
-            image={images.implementation}
-            placement={layout.implementation}
-            canvas={layout.canvas}
-          />
-        </TransformedContent>
-        <PaneLabel>{ROLE_LABEL.implementation}</PaneLabel>
-      </PaneFrame>
+    <span
+      className={cn(
+        'bg-material text-fg shadow-raised pointer-events-none absolute top-3 flex items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 text-xs font-medium backdrop-blur-md',
+        side === 'left' ? 'left-3' : 'right-3',
+      )}
+    >
+      <span className={cn('size-2 rounded-full', ROLE_DOT[role])} />
+      {ROLE_LABEL[role]}
+      {detail && <span className="tabular text-fg-subtle font-normal">{detail}</span>}
+    </span>
+  );
+}
+
+/** Image pixels, centred where they land on the canvas, over a checkerboard. */
+function paintImage(frame: Frame, images: ImagePair, layout: ComparisonLayout, role: ImageRole) {
+  drawBackdrop(frame, layout.canvas, 'checker');
+  drawPlacement(frame, images[role].bitmap, layout[role]);
+  drawEdge(frame, layout.canvas);
+}
+
+function overlays(frame: Frame, layout: ComparisonLayout) {
+  drawGrid(frame, layout.canvas);
+  drawProbe(frame);
+}
+
+export function SideBySideView({ images, layout }: ViewProps) {
+  const paintReference = useCallback(
+    (frame: Frame) => {
+      paintImage(frame, images, layout, 'reference');
+      overlays(frame, layout);
+    },
+    [images, layout],
+  );
+  const paintImplementation = useCallback(
+    (frame: Frame) => {
+      paintImage(frame, images, layout, 'implementation');
+      overlays(frame, layout);
+    },
+    [images, layout],
+  );
+  return (
+    <div className="bg-line-strong grid h-full grid-cols-1 grid-rows-2 gap-px md:grid-cols-2 md:grid-rows-1">
+      <PaneCanvas paint={paintReference} measure label="Reference screenshot">
+        <RoleTag role="reference" detail={formatDimensions(images.reference)} />
+      </PaneCanvas>
+      <PaneCanvas paint={paintImplementation} label="Implementation screenshot">
+        <RoleTag role="implementation" detail={formatDimensions(images.implementation)} />
+      </PaneCanvas>
     </div>
   );
 }
 
 interface SliderViewProps extends ViewProps {
   readonly position: number;
-  readonly onPositionChange: (position: number) => void;
+  readonly onPositionCommit: (position: number) => void;
 }
 
-export function SliderView({ images, layout, position, onPositionChange }: SliderViewProps) {
+export function SliderView({ images, layout, position, onPositionCommit }: SliderViewProps) {
+  // The live position exists only while dragging; it never touches the persisted view state.
+  const [live, setLive] = useState<number | null>(null);
+  const split = live ?? position;
+  const peek = usePeek();
+
+  const paint = useCallback(
+    (frame: Frame) => {
+      drawBackdrop(frame, layout.canvas, 'checker');
+      const { ctx, pane } = frame;
+      if (peek !== 'implementation')
+        drawPlacement(frame, images.reference.bitmap, layout.reference);
+      if (peek !== 'reference') {
+        // The clip edge and the divider's CSS `left` are both split × the pane's width.
+        const edge = peek === 'implementation' ? 0 : split * pane.width;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(edge, 0, pane.width - edge, pane.height);
+        ctx.clip();
+        drawPlacement(frame, images.implementation.bitmap, layout.implementation);
+        ctx.restore();
+      }
+      drawEdge(frame, layout.canvas);
+      overlays(frame, layout);
+    },
+    [images, layout, split, peek],
+  );
+
   return (
-    <PaneFrame measure className="bg-canvas h-full">
-      <TransformedContent size={layout.canvas}>
-        <ImageLayer image={images.reference} placement={layout.reference} canvas={layout.canvas} />
-      </TransformedContent>
-      {/* The divider lives in pane space, so it stays put while the image zooms and pans. */}
-      <div
-        className="bg-canvas absolute inset-0"
-        style={{ clipPath: `inset(0 0 0 ${position * 100}%)` }}
-      >
-        <TransformedContent size={layout.canvas}>
-          <ImageLayer
-            image={images.implementation}
-            placement={layout.implementation}
-            canvas={layout.canvas}
-          />
-        </TransformedContent>
-      </div>
-      <PaneLabel>{ROLE_LABEL.reference}</PaneLabel>
-      <PaneLabel side="right">{ROLE_LABEL.implementation}</PaneLabel>
-      <SliderHandle position={position} onChange={onPositionChange} />
-    </PaneFrame>
+    <PaneCanvas
+      paint={paint}
+      measure
+      label="Reference on the left of the divider, implementation on the right"
+    >
+      <RoleTag role="reference" />
+      <RoleTag role="implementation" side="right" />
+      <SliderHandle
+        position={split}
+        onChange={setLive}
+        onCommit={(next) => {
+          onPositionCommit(next);
+          setLive(null);
+        }}
+      />
+    </PaneCanvas>
   );
 }
 
 export function OverlayView({ images, layout, opacity }: ViewProps & { opacity: number }) {
+  const peek = usePeek();
+  const paint = useCallback(
+    (frame: Frame) => {
+      drawBackdrop(frame, layout.canvas, 'checker');
+      // Opacity is a drawing parameter only; the comparison never sees it.
+      if (peek !== 'implementation')
+        drawPlacement(frame, images.reference.bitmap, layout.reference);
+      if (peek !== 'reference') {
+        drawPlacement(
+          frame,
+          images.implementation.bitmap,
+          layout.implementation,
+          peek ? 1 : opacity,
+        );
+      }
+      drawEdge(frame, layout.canvas);
+      overlays(frame, layout);
+    },
+    [images, layout, opacity, peek],
+  );
   return (
-    <PaneFrame measure className="bg-canvas h-full">
-      <TransformedContent size={layout.canvas}>
-        <ImageLayer image={images.reference} placement={layout.reference} canvas={layout.canvas} />
-        <ImageLayer
-          image={images.implementation}
-          placement={layout.implementation}
-          canvas={layout.canvas}
-          style={{ opacity }}
-        />
-      </TransformedContent>
-      <PaneLabel>
-        {ROLE_LABEL.implementation} at {Math.round(opacity * 100)}% over {ROLE_LABEL.reference}
-      </PaneLabel>
-    </PaneFrame>
+    <PaneCanvas paint={paint} measure label="Implementation drawn over the reference">
+      <RoleTag role="reference" detail="below" />
+      <RoleTag role="implementation" detail={`${Math.round(opacity * 100)}% above`} side="right" />
+    </PaneCanvas>
   );
 }
 
 interface DiffViewProps extends ViewProps {
   /** A result computed for the current layout, or null while none is available. */
   readonly result: DiffResult | null;
-  readonly error: string | null;
-  readonly onRetry: () => void;
+  /** How strongly the reference shows beneath the mask. */
+  readonly context: number;
 }
 
-export function DiffView({ images, layout, result, error, onRetry }: DiffViewProps) {
-  // Zoomed out, single changed pixels vanish; the density layer keeps their area visible.
-  const zoomedOut = useViewportStore((state) => state.transform.scale < 1);
-
-  return (
-    <PaneFrame measure className="bg-canvas h-full">
-      <TransformedContent size={layout.canvas}>
-        {/* A flat backdrop: the dimmed reference is context only and must not compete with the mask. */}
-        <div className="absolute inset-0 bg-[#0f1113]" />
-        <ImageLayer
-          image={images.reference}
-          placement={layout.reference}
-          canvas={layout.canvas}
-          style={{ opacity: 0.28, filter: 'grayscale(1)' }}
-        />
-        {result && zoomedOut && <DensityLayer density={result.density} />}
-        {result && <MaskLayer mask={result.mask} canvas={layout.canvas} />}
-      </TransformedContent>
-      <PaneLabel>Differences over {ROLE_LABEL.reference}</PaneLabel>
-
-      {result && (
-        <ul className="bg-surface/85 text-fg-muted ring-line pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-x-3 gap-y-1 rounded px-2 py-1 text-[11px] ring-1 backdrop-blur-sm">
-          <LegendItem color="bg-diff" label="Different" />
-          {!result.settings.includeAA && (
-            <LegendItem color="bg-aa" label="Anti-aliasing (ignored)" />
-          )}
-          {layout.mismatched && result.stats.outsidePixels > 0 && (
-            <LegendItem color="bg-outside/60" label="Outside overlap (not compared)" />
-          )}
-        </ul>
-      )}
-
-      {!result && !error && (
-        <p
-          role="status"
-          className="bg-surface/90 text-fg-muted ring-line absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md px-3 py-1.5 ring-1"
-        >
-          Comparing pixels…
-        </p>
-      )}
-
-      {error && (
-        <div
-          role="alert"
-          className="bg-surface ring-danger/50 absolute top-1/2 left-1/2 flex w-72 max-w-[90%] -translate-x-1/2 -translate-y-1/2 flex-col items-start gap-2 rounded-md p-3 ring-1"
-        >
-          <p className="text-danger font-medium">The comparison failed</p>
-          <p className="text-fg-muted text-xs">{error}</p>
-          <Button onClick={onRetry}>Try again</Button>
-        </div>
-      )}
-    </PaneFrame>
+export function DiffView({ images, layout, result, context }: DiffViewProps) {
+  const paint = useCallback(
+    (frame: Frame) => {
+      drawBackdrop(frame, layout.canvas, 'flat');
+      drawPlacement(frame, images.reference.bitmap, layout.reference, context);
+      desaturate(frame, layout.canvas);
+      if (result) {
+        drawOutside(frame, layout.canvas, layout.overlap);
+        drawDensity(frame, result.density, layout.canvas);
+        if (result.maskBitmap) {
+          drawLayer(frame, result.maskBitmap, layout.overlap, { x: 0, y: 0 });
+        }
+      }
+      drawEdge(frame, layout.canvas);
+      overlays(frame, layout);
+    },
+    [images, layout, result, context],
   );
-}
-
-function LegendItem({ color, label }: { color: string; label: string }) {
   return (
-    <li className="flex items-center gap-1.5">
-      <span className={`size-2 rounded-[2px] ${color}`} />
-      {label}
-    </li>
+    <PaneCanvas
+      paint={paint}
+      measure
+      label="Differences between the images, highlighted over the reference"
+    >
+      <RoleTag role="reference" detail="context" />
+    </PaneCanvas>
   );
 }

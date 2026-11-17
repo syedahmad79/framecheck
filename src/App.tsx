@@ -51,8 +51,8 @@ export function App() {
   }
 
   return (
-    <main className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <Logo />
+    <main className="bg-bg flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <Logo size={28} />
       {status === 'error' ? (
         <div role="alert" className="flex max-w-sm flex-col items-center gap-3">
           <h1 className="text-base font-semibold">This comparison could not be opened</h1>

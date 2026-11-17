@@ -2,7 +2,9 @@ import { vi } from 'vitest';
 import { validateFile } from '@/domain/files';
 import type { LoadedImage } from '@/services/images';
 import type { ProjectRecord, ProjectRepository } from '@/services/projectRepository';
-import { DEFAULT_DIFF_SETTINGS, DEFAULT_VIEW_SETTINGS } from '@/domain/types';
+import type { DiffComputation } from '@/domain/diff';
+import { DEFAULT_DIFF_SETTINGS, DEFAULT_VIEW_SETTINGS, type DiffSettings } from '@/domain/types';
+import type { DiffResult } from '@/services/diffProtocol';
 
 export function fakeLoadedImage(name: string, width = 100, height = 80): LoadedImage {
   return {
@@ -55,4 +57,17 @@ export function fakeRepository(initial: ProjectRecord[] = []) {
       return Promise.resolve();
     }),
   } satisfies ProjectRepository;
+}
+
+/** Wrap a real computation as the worker would return it, without the raw mask. */
+export function fakeResult(computation: DiffComputation, settings: DiffSettings): DiffResult {
+  return {
+    layout: computation.layout,
+    stats: computation.stats,
+    density: computation.density,
+    maskBitmap: null,
+    settings,
+    compareMs: 4.2,
+    decodeMs: 0,
+  };
 }

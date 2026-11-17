@@ -65,3 +65,8 @@ export async function loadImageFile(file: File): Promise<LoadedImage> {
 export function releaseImage(image: LoadedImage): void {
   image.bitmap.close();
 }
+
+/** Free the GPU/CPU memory held by a finished comparison's mask. */
+export function releaseResult(result: { readonly maskBitmap: ImageBitmap | null } | null): void {
+  result?.maskBitmap?.close();
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLACK, pixelAt, RED, solidImage, withPixels } from '@/test/pixels';
-import { buildOutsideMask, computeLayout, placeOnCanvas } from './layout';
+import type { Rect } from './types';
+import { computeLayout, extractRegion, sourceOrigin, subtractRect } from './layout';
 
 describe('computeLayout', () => {
   it('is an identity layout for equal sizes', () => {
@@ -62,52 +63,67 @@ describe('computeLayout', () => {
   });
 });
 
-describe('placeOnCanvas', () => {
-  it('returns the source buffer without copying when it already fills the canvas', () => {
+describe('extractRegion', () => {
+  it('returns the source buffer without copying when the region is the whole image', () => {
     const image = solidImage(4, 4);
     const layout = computeLayout(image, image, 'pad', 'top-left');
-    expect(placeOnCanvas(image, layout.reference, layout.canvas)).toBe(image.data);
+    expect(extractRegion(image, layout.reference, layout.overlap)).toBe(image.data);
   });
 
-  it('pads with transparent pixels around an offset image', () => {
-    const small = solidImage(2, 2, RED);
-    const layout = computeLayout({ width: 4, height: 4 }, small, 'pad', 'center');
-    const placed = placeOnCanvas(small, layout.implementation, layout.canvas);
-    expect(placed).toHaveLength(4 * 4 * 4);
-    expect(pixelAt(placed, 4, 0, 0)).toEqual([0, 0, 0, 0]);
-    expect(pixelAt(placed, 4, 1, 1)).toEqual([...RED]);
-    expect(pixelAt(placed, 4, 2, 2)).toEqual([...RED]);
-    expect(pixelAt(placed, 4, 3, 3)).toEqual([0, 0, 0, 0]);
+  it('copies the covered rows from the right source offset (pad)', () => {
+    const image = withPixels(solidImage(6, 4), [[2, 1]], RED);
+    const layout = computeLayout({ width: 4, height: 4 }, image, 'pad', 'top-left');
+    // The overlap is the 4x4 top-left corner of the 6x4 image.
+    const region = extractRegion(image, layout.implementation, layout.overlap);
+    expect(region).toHaveLength(4 * 4 * 4);
+    expect(pixelAt(region, 4, 2, 1)).toEqual([...RED]);
+    expect(pixelAt(region, 4, 3, 1)).toEqual([255, 255, 255, 255]);
   });
 
-  it('crops from the correct source offset', () => {
-    const big = withPixels(solidImage(4, 4), [[1, 1]], BLACK);
+  it('crops from the centre of the larger source', () => {
+    const big = withPixels(solidImage(6, 6), [[2, 2]], BLACK);
     const layout = computeLayout(big, { width: 2, height: 2 }, 'crop', 'center');
-    const placed = placeOnCanvas(big, layout.reference, layout.canvas);
-    expect(placed).toHaveLength(2 * 2 * 4);
-    expect(pixelAt(placed, 2, 0, 0)).toEqual([...BLACK]);
-    expect(pixelAt(placed, 2, 1, 1)).toEqual([255, 255, 255, 255]);
+    // Centre crop of a 6x6 image to 2x2 starts at source (2, 2).
+    const region = extractRegion(big, layout.reference, layout.overlap);
+    expect(pixelAt(region, 2, 0, 0)).toEqual([...BLACK]);
+    expect(pixelAt(region, 2, 1, 1)).toEqual([255, 255, 255, 255]);
   });
 });
 
-describe('buildOutsideMask', () => {
-  it('is null when both images cover the canvas', () => {
-    const size = { width: 8, height: 8 };
-    expect(buildOutsideMask(computeLayout(size, size, 'pad', 'top-left'))).toBeNull();
-    expect(
-      buildOutsideMask(computeLayout(size, { width: 4, height: 4 }, 'crop', 'top-left')),
-    ).toBeNull();
+describe('sourceOrigin', () => {
+  it('maps a canvas point back to the source image', () => {
+    const placement = { sx: 3, sy: 0, dx: 5, dy: 2, width: 10, height: 10 };
+    expect(sourceOrigin(placement, { x: 5, y: 2 })).toEqual({ x: 3, y: 0 });
+    expect(sourceOrigin(placement, { x: 9, y: 4 })).toEqual({ x: 7, y: 2 });
+  });
+});
+
+describe('subtractRect', () => {
+  const area = (rects: Rect[]) => rects.reduce((sum, r) => sum + r.width * r.height, 0);
+
+  it('returns nothing when the inner rectangle is the whole outer one', () => {
+    const outer = { x: 0, y: 0, width: 10, height: 8 };
+    expect(subtractRect(outer, outer)).toEqual([]);
   });
 
-  it('marks every pixel covered by only one image', () => {
-    const layout = computeLayout(
-      { width: 4, height: 2 },
-      { width: 2, height: 3 },
-      'pad',
-      'top-left',
+  it('covers exactly the uncovered area without overlapping the inner rectangle', () => {
+    const outer = { x: 0, y: 0, width: 10, height: 8 };
+    const inner = { x: 2, y: 3, width: 5, height: 2 };
+    const rects = subtractRect(outer, inner);
+    expect(area(rects)).toBe(80 - 10);
+    for (const r of rects) {
+      const overlapsX = r.x < inner.x + inner.width && inner.x < r.x + r.width;
+      const overlapsY = r.y < inner.y + inner.height && inner.y < r.y + r.height;
+      expect(overlapsX && overlapsY).toBe(false);
+    }
+  });
+
+  it('handles an inner rectangle flush with two edges', () => {
+    const rects = subtractRect(
+      { x: 0, y: 0, width: 10, height: 10 },
+      { x: 0, y: 0, width: 6, height: 4 },
     );
-    const mask = buildOutsideMask(layout);
-    // canvas is 4x3; overlap is the top-left 2x2
-    expect(Array.from(mask ?? [])).toEqual([0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1]);
+    expect(area(rects)).toBe(100 - 24);
+    expect(rects).toHaveLength(2);
   });
 });

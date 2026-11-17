@@ -9,7 +9,13 @@ import {
 } from '@/domain/types';
 import type { DiffClient } from '@/services/diffClient';
 import type { DiffResult } from '@/services/diffProtocol';
-import { releaseImage, toImageMeta, type ImagePair, type LoadedImage } from '@/services/images';
+import {
+  releaseImage,
+  releaseResult,
+  toImageMeta,
+  type ImagePair,
+  type LoadedImage,
+} from '@/services/images';
 import type { ProjectRepository } from '@/services/projectRepository';
 
 export interface SessionProject {
@@ -62,7 +68,7 @@ export interface SampleSource {
 
 export interface SessionDependencies {
   readonly repository: ProjectRepository;
-  readonly diffClient: Pick<DiffClient, 'run'>;
+  readonly diffClient: Pick<DiffClient, 'run' | 'dispose'>;
   readonly loadBlob: (blob: Blob, meta: { name: string; type?: string }) => Promise<LoadedImage>;
   readonly fetchBlob: (url: string) => Promise<Blob>;
   readonly sample: SampleSource;
@@ -73,6 +79,9 @@ export interface SessionDependencies {
 }
 
 export const SAMPLE_PROJECT_ID = 'sample';
+
+/** The sample opens on the differences, which is the quickest way to see what the tool is for. */
+const SAMPLE_VIEW: ViewSettings = { ...DEFAULT_VIEW_SETTINGS, mode: 'diff' };
 
 const IDLE_DIFF: DiffState = { status: 'idle', result: null, error: null };
 
@@ -112,8 +121,11 @@ export function createSessionStore(deps: SessionDependencies): SessionStore {
 
   return createStore<SessionState>()((set, get) => {
     function releaseCurrent(): void {
-      const { images } = get();
+      const { images, diff } = get();
       if (images) IMAGE_ROLES.forEach((role) => releaseImage(images[role]));
+      releaseResult(diff.result);
+      // Stops a running comparison and frees the worker's decoded copies of both images.
+      deps.diffClient.dispose();
     }
 
     function reset(next: Partial<SessionState>): number {
@@ -138,10 +150,16 @@ export function createSessionStore(deps: SessionDependencies): SessionStore {
           settings,
         });
         // `null` means a newer request superseded this one.
-        if (!result || startedFor !== generation) return;
+        if (!result || startedFor !== generation) {
+          if (result) releaseResult(result);
+          return;
+        }
+        const previous = get().diff.result;
         set({ diff: { status: 'ready', result, error: null } });
+        releaseResult(previous);
       } catch (error) {
         if (startedFor !== generation) return;
+        releaseResult(get().diff.result);
         set({
           diff: {
             status: 'error',
@@ -300,6 +318,7 @@ export function createSessionStore(deps: SessionDependencies): SessionStore {
             status: 'ready',
             images,
             project: { id: SAMPLE_PROJECT_ID, name: sample.name, persisted: false, isSample: true },
+            view: SAMPLE_VIEW,
           });
           void runDiff();
         } catch (error) {
